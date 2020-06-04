@@ -94,7 +94,6 @@ impl CRT {
     }
 }
 
-
 pub enum Object {
     Indirect {
         num: Cell<Option<usize>>,
@@ -103,7 +102,7 @@ pub enum Object {
     },
     Direct {
         data: RefCell<Option<Rc<dyn PDFData>>>,
-    }
+    },
 }
 enum ObjError {
     AlreadyAssigned,
@@ -127,50 +126,47 @@ impl Object {
     }
     pub fn assign(&self, new_data: Rc<dyn PDFData>) {
         match self {
-            Self::Indirect{data, ..} => {
+            Self::Indirect { data, .. } => {
                 let mut it = data.borrow_mut();
                 if let Some(_) = it.as_ref() {
                     panic!("Already assigned some data");
                 }
                 *it = Some(new_data);
-            },
-            Self::Direct{data} => {
+            }
+            Self::Direct { data } => {
                 let mut it = data.borrow_mut();
                 if let Some(_) = it.as_ref() {
                     panic!("Already assigned some data");
                 }
                 *it = Some(new_data);
-            },
+            }
         }
-        
     }
     fn write_obj<T: Write>(&self, crt: &mut CRT, out: &mut Output<T>) -> io::Result<()> {
         match self {
-            Self::Indirect{num, gen, data} => {
-                crt.add_entry(
-                    out.get_pos(),
-                    num.get().expect("No num"),
-                    *gen,
-                    false,
-                );
+            Self::Indirect { num, gen, data } => {
+                crt.add_entry(out.get_pos(), num.get().expect("No num"), *gen, false);
                 write!(out, "{} {} obj\n", num.get().unwrap(), gen)?;
-                data.borrow().as_ref().expect("Object has no data").write(out)?;
+                data.borrow()
+                    .as_ref()
+                    .expect("Object has no data")
+                    .write(out)?;
                 write!(out, "endobj\n")
-            },
-            Self::Direct{..} => {
+            }
+            Self::Direct { .. } => {
                 panic!("Not an indirect object");
             }
         }
     }
     fn assign_num(&self, new_num: usize) -> Result<(), ObjError> {
         match self {
-            Self::Indirect{num, ..} => {
+            Self::Indirect { num, .. } => {
                 if let Some(_) = num.get() {
                     return Err(ObjError::AlreadyAssigned);
                 }
                 num.set(Some(new_num));
-            },
-            Self::Direct{..} => {
+            }
+            Self::Direct { .. } => {
                 return Err(ObjError::DirectObject);
             }
         }
@@ -180,17 +176,13 @@ impl Object {
 impl PDFData for Object {
     fn write(&self, o: &mut dyn Write) -> io::Result<()> {
         match self {
-            Self::Indirect{num, gen, ..} => {
-                write!(
-                    o,
-                    "{} {} R",
-                    num.get().expect("Object not added to pdf"),
-                    gen
-                )
-            },
-            Self::Direct{data} => {
-                data.borrow().as_ref().expect("Object has no data").write(o)
-            },
+            Self::Indirect { num, gen, .. } => write!(
+                o,
+                "{} {} R",
+                num.get().expect("Object not added to pdf"),
+                gen
+            ),
+            Self::Direct { data } => data.borrow().as_ref().expect("Object has no data").write(o),
         }
     }
 }
@@ -211,11 +203,11 @@ impl PDFWrite {
         }
     }
     /// Add an object the final PDF file
-    /// 
+    ///
     /// Returns the object passed to the function
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// panics if the object has already been added to
     /// the pdf file
     pub fn add_object(&mut self, o: Rc<Object>) -> Rc<Object> {
@@ -223,35 +215,29 @@ impl PDFWrite {
             Ok(()) => {
                 self.objects.push(o.clone());
                 self.cur_num += 1;
-            },
-            Err(ObjError::AlreadyAssigned) => {
-
-            },
-            Err(ObjError::DirectObject) => {
-
             }
+            Err(ObjError::AlreadyAssigned) => {}
+            Err(ObjError::DirectObject) => {}
         }
         o
     }
     /// Add an object the final PDF file, and sets
     /// the root document object to point at it.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// panics if the object has already been added to
     /// the pdf file
     pub fn set_root(&mut self, o: Rc<Object>) {
         match o.as_ref() {
-            Object::Indirect{..} => {
+            Object::Indirect { .. } => {
                 if let Some(_) = self.trailer.root {
                     panic!("An object is already root");
                 }
                 self.add_object(o.clone());
                 self.trailer.root = Some(o);
-            },
-            _ => {
-                panic!("Root must be indirect object")
             }
+            _ => panic!("Root must be indirect object"),
         }
     }
     pub fn write(mut self, o: &mut dyn Write) -> io::Result<()> {
@@ -299,6 +285,9 @@ impl PDFData for Trailer {
         ]);
         if let Some(info) = self.info.clone() {
             dict.add_entry("Info", info);
+        }
+        if let Some(id) = self.id.clone() {
+            dict.add_entry("ID", id);
         }
         dict.write(o)
     }

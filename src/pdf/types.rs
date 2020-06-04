@@ -17,6 +17,11 @@ impl PDFData for f64 {
         write!(o, "{}", self)
     }
 }
+impl PDFData for [std::string::String; 2] {
+    fn write(&self, o: &mut dyn Write) -> Result<()> {
+        write!(o, "[{}, {}]", self[0], self[1])
+    }
+}
 impl<T: PDFData> PDFData for Vec<Rc<T>> {
     fn write(&self, o: &mut dyn Write) -> Result<()> {
         write!(o, "[")?;
@@ -114,7 +119,7 @@ pub struct Stream {
 }
 
 impl Stream {
-    pub fn new(mut meta: Rc<Dict>, data: Vec<u8>) -> Rc<Self> {
+    pub fn new(meta: Rc<Dict>, data: Vec<u8>) -> Rc<Self> {
         meta.add_entry("Length", Rc::new(data.len()));
         Rc::new(Self { meta, data })
     }

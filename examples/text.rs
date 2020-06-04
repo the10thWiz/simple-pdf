@@ -5,12 +5,11 @@ fn main() -> std::io::Result<()> {
     let mut pdf = PDF::new();
     let mut page = Page::new(); // Page builder
     page.add(
-        &graphics::Path::from((10f64, 10f64))
-            .line_to((200f64, 200f64))
-            .rect((10f64, 10f64, 190f64, 190f64))
-            .stroke(graphics::Color::red()),
+        &graphics::Text::new(graphics::Font::times_new_roman(), 12f64)
+            .move_to((100f64, 100f64))
+            .text("Hello World!"),
     );
     pdf.add_page(page);
-    let mut output = File::create("simple")?;
+    let mut output = File::create("text")?;
     pdf.write(&mut output)
 }

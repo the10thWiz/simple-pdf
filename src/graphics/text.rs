@@ -1,4 +1,4 @@
-use super::{Color, Graphic, GraphicContext, Parameter, Point};
+use super::{Color, Graphic, GraphicContext, Point};
 use crate::pdf::{Dict, Name, Object, PDFData};
 use std::io::{self, Write};
 use std::rc::Rc;
@@ -116,12 +116,15 @@ pub struct Font {
     object: Rc<Object>,
 }
 impl Font {
+    /// Internal Object for constructing pdf
     pub fn name(&self) -> Rc<Name> {
         self.name.clone()
     }
+    /// Internal Object for constructing pdf
     pub fn object(&self) -> Rc<Object> {
         self.object.clone()
     }
+    /// One of the 14 standard fonts
     pub fn times_new_roman() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesroman"),
@@ -131,50 +134,55 @@ impl Font {
             ),
         })
     }
+    /// One of the 14 standard fonts
     pub fn helvetica() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Helvetica"),
+            name: Name::new("helvetica"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Helvetica"), None, None, None),
             ),
         })
     }
+    /// One of the 14 standard fonts
     pub fn courier() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Courier"),
+            name: Name::new("courier"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Courier"), None, None, None),
             ),
         })
     }
+    /// One of the 14 standard fonts
     pub fn symbol() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Symbol"),
+            name: Name::new("symbol"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Symbol"), None, None, None),
             ),
         })
     }
+    /// One of the 14 standard fonts
     pub fn times_bold() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Times−Bold"),
+            name: Name::new("timesbold"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Times−Bold"), None, None, None),
             ),
         })
     }
+    /// One of the 14 standard fonts
     pub fn helvetica_bold() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Helvetica−Bold"),
+            name: Name::new("helveticabold"),
             object: Object::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
-                    Name::new("Helvetica−Bold"),
+                    Name::new("helveticabold"),
                     None,
                     None,
                     None,
@@ -182,41 +190,45 @@ impl Font {
             ),
         })
     }
-    pub fn Courier_Bold() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn courier_bold() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Courier−Bold"),
+            name: Name::new("courierbold"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Courier−Bold"), None, None, None),
             ),
         })
     }
-    pub fn ZapfDingbats() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn zapf_dingbats() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("ZapfDingbats"),
+            name: Name::new("zapfdingbats"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("ZapfDingbats"), None, None, None),
             ),
         })
     }
-    pub fn Times_Italic() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn times_italic() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Times−Italic"),
+            name: Name::new("timesitalic"),
             object: Object::new(
                 0,
                 FontObject::new(FontType::Type1, Name::new("Times−Italic"), None, None, None),
             ),
         })
     }
-    pub fn Helvetica_Oblique() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn helvetica_oblique() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Helvetica−Oblique"),
+            name: Name::new("helveticaoblique"),
             object: Object::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
-                    Name::new("Helvetica−Oblique"),
+                    Name::new("helveticaoblique"),
                     None,
                     None,
                     None,
@@ -224,9 +236,10 @@ impl Font {
             ),
         })
     }
-    pub fn Courier_Oblique() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn courier_oblique() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Courier−Oblique"),
+            name: Name::new("courieroblique"),
             object: Object::new(
                 0,
                 FontObject::new(
@@ -239,9 +252,10 @@ impl Font {
             ),
         })
     }
-    pub fn Times_BoldItalic() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn times_bold_italic() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Times−BoldItalic"),
+            name: Name::new("timesbolditalic"),
             object: Object::new(
                 0,
                 FontObject::new(
@@ -254,9 +268,10 @@ impl Font {
             ),
         })
     }
-    pub fn Helvetica_BoldOblique() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn helvetica_bold_oblique() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Helvetica−BoldOblique"),
+            name: Name::new("helveticaboldoblique"),
             object: Object::new(
                 0,
                 FontObject::new(
@@ -269,9 +284,10 @@ impl Font {
             ),
         })
     }
-    pub fn Courier_BoldOblique() -> Rc<Self> {
+    /// One of the 14 standard fonts
+    pub fn courier_bold_oblique() -> Rc<Self> {
         Rc::new(Self {
-            name: Name::new("Courier−BoldOblique"),
+            name: Name::new("courierboldoblique"),
             object: Object::new(
                 0,
                 FontObject::new(
@@ -288,7 +304,8 @@ impl Font {
 
 // Times−Roman
 
-mod pdfDocEncode {
+mod pdf_doc_encode {
+    #[allow(unused)]
     fn decode(c: u8) {
         match c {
             0x00 => (), // U+0000

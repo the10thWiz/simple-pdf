@@ -22,24 +22,43 @@ pub struct Path {
 }
 
 impl Path {
-    pub fn new() -> Self {
-        Self {
-            path: vec![],
-            cur: Some(vec![]),
-        }
-    }
+    /// Starts a new path from the given point
+    ///
+    /// - point: see Point
     pub fn from(point: impl Into<Point>) -> Self {
         Self {
             path: vec![],
             cur: Some(vec![PathPart::Start(point.into())]),
         }
     }
+    /// Starts a new subpath, without closing the current subpath
+    ///
+    /// - point: see Point
+    ///
+    /// This does not draw a line or curve to the point, but does not
+    /// close the current subpath. See move_to_and_close for more detail
     pub fn move_to(mut self, point: impl Into<Point>) -> Self {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         self.cur = Some(vec![PathPart::Start(point.into())]);
         self
     }
+    /// Starts a new subpath, while closing the current subpath
+    ///
+    /// - point: see Point
+    ///
+    /// This does not draw a line or curve to the point, and closes the
+    /// current subpath. This is equavalent to `.line_to(pos).move_to(point)`
+    /// where pos is the start of the current subpath
+    pub fn move_to_and_close(mut self, point: impl Into<Point>) -> Self {
+        self.path
+            .push(SubPath::Parts(self.cur.take().unwrap(), true));
+        self.cur = Some(vec![PathPart::Start(point.into())]);
+        self
+    }
+    /// Adds a line to the current subpath
+    ///
+    /// - point: See Point for more info
     pub fn line_to(mut self, point: impl Into<Point>) -> Self {
         self.cur
             .as_mut()
@@ -47,13 +66,33 @@ impl Path {
             .push(PathPart::Line(point.into()));
         self
     }
-    pub fn curve_to(mut self, p1: impl Into<Point>, p2: impl Into<Point>, p3: impl Into<Point>) -> Self {
+    /// Adds a bezier to the current subpath
+    ///
+    /// - p1: See Point for more info
+    /// - p2: See Point for more info
+    /// - p3: See Point for more info
+    ///
+    /// Draws a 3rd degree bezier, using the last point, p1,
+    /// p2, and p3 as it's control points.
+    pub fn curve_to(
+        mut self,
+        p1: impl Into<Point>,
+        p2: impl Into<Point>,
+        p3: impl Into<Point>,
+    ) -> Self {
         self.cur
             .as_mut()
             .unwrap()
             .push(PathPart::Bezier(p1.into(), p2.into(), p3.into()));
         self
     }
+    /// Adds a bezier to the current subpath
+    ///
+    /// - p2: See Point for more info
+    /// - p3: See Point for more info
+    ///
+    /// Draws a 3rd degree bezier, using the last point, the last point,
+    /// p2, and p3 as it's control points.
     pub fn curve_to_last(mut self, p2: impl Into<Point>, p3: impl Into<Point>) -> Self {
         self.cur
             .as_mut()
@@ -61,6 +100,13 @@ impl Path {
             .push(PathPart::BezierLast(p2.into(), p3.into()));
         self
     }
+    /// Adds a bezier to the current subpath
+    ///
+    /// - p1: See Point for more info
+    /// - p2: See Point for more info
+    ///
+    /// Draws a 3rd degree bezier, using the last point, p1,
+    /// p2, and p2 as it's control points.
     pub fn curve_to_next(mut self, p1: impl Into<Point>, p2: impl Into<Point>) -> Self {
         self.cur
             .as_mut()
@@ -68,13 +114,34 @@ impl Path {
             .push(PathPart::BezierNext(p1.into(), p2.into()));
         self
     }
+    /// Adds a Rectangle to the path
+    ///
+    /// - r: See Rect
+    ///
+    /// This does not interupt or modify the current subpath,
+    /// but does add a subpath. The rectangle is added before
+    /// the current subpath, but that shouldn't matter to most
+    /// PDF viewers
     pub fn rect(mut self, r: impl Into<Rect>) -> Self {
         self.path.push(SubPath::Rect(r.into()));
         self
     }
+    /// Complete the path with a stroking operation
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Note:
+    ///
+    /// Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
     pub fn stroke(mut self, color: Color) -> GraphicPath {
-        self.path
-            .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        if self.cur.as_ref().unwrap().len() > 1 {
+            self.path
+                .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        }
         GraphicPath {
             path: self.path,
             stroke: Some(color),
@@ -82,6 +149,17 @@ impl Path {
             even_odd: false,
         }
     }
+    /// Complete the path with a filling operation
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Note:
+    ///
+    /// Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
     pub fn fill(mut self, color: Color) -> GraphicPath {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
@@ -92,7 +170,103 @@ impl Path {
             even_odd: false,
         }
     }
+    /// Complete the path with a stroking and filling operation
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Note:
+    ///
+    /// Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
+    pub fn stroke_fill(mut self, stroke: Color, fill: Color) -> GraphicPath {
+        self.path
+            .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        GraphicPath {
+            path: self.path,
+            stroke: Some(stroke),
+            fill: Some(fill),
+            even_odd: false,
+        }
+    }
+    /// Complete the path with a stroking operation, using the even-odd
+    /// winding rule
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Notes:
+    ///
+    /// - See [Adobe's PDF 1.7 spec, 4.4.2, Even-Odd Rule](https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/pdf_reference_1-7.pdf#G9.1850155)
+    /// for more info
+    /// - Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
+    pub fn stroke_even_odd(mut self, color: Color) -> GraphicPath {
+        self.path
+            .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        GraphicPath {
+            path: self.path,
+            stroke: Some(color),
+            fill: None,
+            even_odd: true,
+        }
+    }
+    /// Complete the path with a filling operation, using the even-odd
+    /// winding rule
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Notes:
+    ///
+    /// - See [Adobe's PDF 1.7 spec, 4.4.2, Even-Odd Rule]
+    /// (https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/pdf_reference_1-7.pdf#G9.1850155)
+    /// for more info
+    /// - Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
+    pub fn fill_even_odd(mut self, color: Color) -> GraphicPath {
+        self.path
+            .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        GraphicPath {
+            path: self.path,
+            stroke: None,
+            fill: Some(color),
+            even_odd: true,
+        }
+    }
+    /// Complete the path with a stroking and filling operation, using the even-odd
+    /// winding rule
+    ///
+    /// - color: See Color
+    ///
+    /// Draws the current path (ending the current subpath, without closing it)
+    ///
+    /// # Notes:
+    ///
+    /// - See [Adobe's PDF 1.7 spec, 4.4.2, Even-Odd Rule]
+    /// (https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/pdf_reference_1-7.pdf#G9.1850155)
+    /// for more info
+    /// - Only adds the current subpath if it has more than one point. The PDF
+    /// spec says that painting or clipping with a subpath that only has a
+    /// single point is device dependent, so this should not cause a problem
+    pub fn stroke_fill_even_odd(mut self, stroke: Color, fill: Color) -> GraphicPath {
+        self.path
+            .push(SubPath::Parts(self.cur.take().unwrap(), false));
+        GraphicPath {
+            path: self.path,
+            stroke: Some(stroke),
+            fill: Some(fill),
+            even_odd: true,
+        }
+    }
 }
+#[derive(Debug)]
 pub struct GraphicPath {
     path: Vec<SubPath>,
     stroke: Option<Color>,
@@ -110,9 +284,7 @@ impl Graphic for GraphicPath {
         for subpath in &self.path {
             match subpath {
                 SubPath::Parts(subpath, closed) => {
-                    let mut points = subpath.iter().copied();
-                    for point in points {
-                        // g.command(&mut [point.into()], "l");
+                    for point in subpath.iter().copied() {
                         match point {
                             PathPart::Start(p) => g.command(&mut [p.into()], "m"),
                             PathPart::Line(p) => g.command(&mut [p.into()], "l"),
@@ -135,9 +307,21 @@ impl Graphic for GraphicPath {
             }
         }
         match (self.fill, self.stroke) {
-            (Some(..), Some(..)) => g.command(&mut [], "B"),
+            (Some(..), Some(..)) => {
+                if self.even_odd {
+                    g.command(&mut [], "B*")
+                } else {
+                    g.command(&mut [], "B")
+                }
+            }
             (None, Some(..)) => g.command(&mut [], "S"),
-            (Some(..), None) => g.command(&mut [], "f"),
+            (Some(..), None) => {
+                if self.even_odd {
+                    g.command(&mut [], "f*")
+                } else {
+                    g.command(&mut [], "f")
+                }
+            }
             (None, None) => unreachable!(),
         }
     }

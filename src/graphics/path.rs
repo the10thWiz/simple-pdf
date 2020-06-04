@@ -1,4 +1,5 @@
 use super::{Color, Graphic, GraphicContext, Point, Rect};
+use std::rc::Rc;
 
 #[derive(Clone, Debug, Copy)]
 enum PathPart {
@@ -137,17 +138,17 @@ impl Path {
     /// Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn stroke(mut self, color: Color) -> GraphicPath {
+    pub fn stroke(mut self, color: Color) -> Rc<GraphicPath> {
         if self.cur.as_ref().unwrap().len() > 1 {
             self.path
                 .push(SubPath::Parts(self.cur.take().unwrap(), false));
         }
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: Some(color),
             fill: None,
             even_odd: false,
-        }
+        })
     }
     /// Complete the path with a filling operation
     ///
@@ -160,15 +161,15 @@ impl Path {
     /// Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn fill(mut self, color: Color) -> GraphicPath {
+    pub fn fill(mut self, color: Color) -> Rc<GraphicPath> {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: None,
             fill: Some(color),
             even_odd: false,
-        }
+        })
     }
     /// Complete the path with a stroking and filling operation
     ///
@@ -181,15 +182,15 @@ impl Path {
     /// Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn stroke_fill(mut self, stroke: Color, fill: Color) -> GraphicPath {
+    pub fn stroke_fill(mut self, stroke: Color, fill: Color) -> Rc<GraphicPath> {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: Some(stroke),
             fill: Some(fill),
             even_odd: false,
-        }
+        })
     }
     /// Complete the path with a stroking operation, using the even-odd
     /// winding rule
@@ -205,15 +206,15 @@ impl Path {
     /// - Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn stroke_even_odd(mut self, color: Color) -> GraphicPath {
+    pub fn stroke_even_odd(mut self, color: Color) -> Rc<GraphicPath> {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: Some(color),
             fill: None,
             even_odd: true,
-        }
+        })
     }
     /// Complete the path with a filling operation, using the even-odd
     /// winding rule
@@ -230,15 +231,15 @@ impl Path {
     /// - Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn fill_even_odd(mut self, color: Color) -> GraphicPath {
+    pub fn fill_even_odd(mut self, color: Color) -> Rc<GraphicPath> {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: None,
             fill: Some(color),
             even_odd: true,
-        }
+        })
     }
     /// Complete the path with a stroking and filling operation, using the even-odd
     /// winding rule
@@ -255,15 +256,15 @@ impl Path {
     /// - Only adds the current subpath if it has more than one point. The PDF
     /// spec says that painting or clipping with a subpath that only has a
     /// single point is device dependent, so this should not cause a problem
-    pub fn stroke_fill_even_odd(mut self, stroke: Color, fill: Color) -> GraphicPath {
+    pub fn stroke_fill_even_odd(mut self, stroke: Color, fill: Color) -> Rc<GraphicPath> {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
-        GraphicPath {
+        Rc::new(GraphicPath {
             path: self.path,
             stroke: Some(stroke),
             fill: Some(fill),
             even_odd: true,
-        }
+        })
     }
 }
 #[derive(Debug)]

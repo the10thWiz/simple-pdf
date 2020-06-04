@@ -66,7 +66,7 @@ impl Page {
             graphics: GraphicContext::new(),
         }
     }
-    pub fn add(&mut self, g: &impl Graphic) {
+    pub fn add(&mut self, g: Rc<impl Graphic>) {
         self.graphics.render(g);
     }
     fn render(self, parent: Rc<Object>, write: &mut pdf::PDFWrite) -> Rc<Object> {

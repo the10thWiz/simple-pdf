@@ -5,7 +5,7 @@ fn main() -> std::io::Result<()> {
     let mut pdf = PDF::new();
     let mut page = Page::new(); // Page builder
     page.add(
-        &graphics::Text::new(graphics::Font::times_new_roman(), 12f64)
+        graphics::Text::new(graphics::Font::times_new_roman(), 12f64)
             .move_to((100f64, 100f64))
             .text("Hello World!"),
     );

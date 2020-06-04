@@ -15,7 +15,6 @@ pub struct GraphicState {
     line_state: (),
     rendering_intent: (),
     blend_state: (),
-    // previous: Option<Box<GraphicState>>,
 }
 impl GraphicState {
     fn new() -> Self {
@@ -30,7 +29,7 @@ impl GraphicState {
             blend_state: (),
         }
     }
-    fn update(&mut self, stream: &mut Vec<u8>, object: &impl Graphic) {
+    fn update(&mut self, stream: &mut Vec<u8>, object: Rc<impl Graphic>) {
         if let Some(fill) = object.fill_color() {
             fill.write(&self.fill, false, stream);
             self.fill = fill;
@@ -66,9 +65,9 @@ impl GraphicContext {
             external_resources: vec![],
         }
     }
-    pub fn render(&mut self, object: &impl Graphic) {
+    pub fn render(&mut self, object: Rc<impl Graphic>) {
         // Check Colors, and update as needed
-        self.current.update(&mut self.stream, object);
+        self.current.update(&mut self.stream, object.clone());
         // Render object
         object.render(self);
     }
@@ -290,7 +289,7 @@ impl Color {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Point(f64, f64);
 
 impl From<(f64, f64)> for Point {
@@ -299,7 +298,7 @@ impl From<(f64, f64)> for Point {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect(f64, f64, f64, f64);
 impl Rect {
     pub fn new(x: f64, y: f64, w: f64, h: f64) -> Self {

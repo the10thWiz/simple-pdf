@@ -1,7 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{Result, Write};
 use std::rc::Rc;
-use std::cell::RefCell;
 
 pub trait PDFData {
     fn write(&self, o: &mut dyn Write) -> Result<()>;
@@ -79,7 +79,9 @@ impl Dict {
         for (n, d) in v {
             items.insert(n.into(), d);
         }
-        Rc::new(Self { items: RefCell::new(items) })
+        Rc::new(Self {
+            items: RefCell::new(items),
+        })
     }
     pub fn add_entry(&self, n: impl Into<Name>, data: Rc<dyn PDFData>) {
         self.items.borrow_mut().insert(n.into(), data);
@@ -88,6 +90,9 @@ impl Dict {
         if let Some(data) = data {
             self.items.borrow_mut().insert(n.into(), data);
         }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.items.borrow().is_empty()
     }
 }
 impl PDFData for Dict {

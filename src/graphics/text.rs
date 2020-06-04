@@ -1,13 +1,44 @@
+use super::{Color, Graphic, GraphicContext, Parameter, Point};
 use crate::pdf::{Dict, Name, Object, PDFData};
 use std::io::{self, Write};
 use std::rc::Rc;
-use super::{Graphic, GraphicContext, Color, Point, Parameter};
+
+struct TextPart {
+    text: String,
+    font: Option<(Rc<Font>, f64)>,
+    pos: Option<Point>,
+}
 
 pub struct Text {
-    data: String,
-    font: Rc<Font>,
-    size: usize,
-    pos: Point,
+    parts: Vec<TextPart>,
+    font: Option<(Rc<Font>, f64)>,
+    pos: Option<Point>,
+}
+
+impl Text {
+    pub fn new(font: Rc<Font>, size: f64) -> Self {
+        Self {
+            parts: vec![],
+            font: Some((font, size)),
+            pos: Some((0f64, 0f64).into()),
+        }
+    }
+    pub fn move_to(mut self, p: impl Into<Point>) -> Self {
+        self.pos = Some(p.into());
+        self
+    }
+    pub fn with_font(mut self, font: Rc<Font>, size: f64) -> Self {
+        self.font = Some((font, size));
+        self
+    }
+    pub fn text(mut self, p: impl Into<String>) -> Self {
+        self.parts.push(TextPart {
+            text: p.into(),
+            font: self.font.take(),
+            pos: self.pos.take(),
+        });
+        self
+    }
 }
 
 impl Graphic for Text {
@@ -19,9 +50,16 @@ impl Graphic for Text {
     }
     fn render(&self, out: &mut GraphicContext) {
         out.command(&mut [], "BT");
-        out.command(&mut [self.font.name.clone().into(), self.size.into()], "Tf");
-        out.command(&mut [self.pos.into()], "Td");
-        out.command(&mut [(&self.data).into()], "Tj");
+        for part in self.parts.iter() {
+            if let Some((font, size)) = &part.font {
+                out.add_font(font.clone());
+                out.command(&mut [font.name.clone().into(), (*size).into()], "Tf");
+            }
+            if let Some(pos) = part.pos {
+                out.command(&mut [pos.into()], "Td");
+            }
+            out.command(&mut [(&part.text).into()], "Tj");
+        }
         out.command(&mut [], "ET");
     }
 }
@@ -66,9 +104,9 @@ impl FontObject {
 impl PDFData for FontObject {
     fn write(&self, o: &mut dyn Write) -> io::Result<()> {
         Dict::from_vec(vec![
-            ("/Type", Name::new("Font")),
-            ("/Subtype", self.subtype.to_name()),
-            ("/BaseFont", self.base_font.clone()),
+            ("Type", Name::new("Font")),
+            ("Subtype", self.subtype.to_name()),
+            ("BaseFont", self.base_font.clone()),
         ])
         .write(o)
     }
@@ -84,7 +122,7 @@ impl Font {
     pub fn object(&self) -> Rc<Object> {
         self.object.clone()
     }
-    pub fn times_roman() -> Rc<Self> {
+    pub fn times_new_roman() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesroman"),
             object: Object::new(
@@ -93,22 +131,162 @@ impl Font {
             ),
         })
     }
+    pub fn helvetica() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Helvetica"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Helvetica"), None, None, None),
+            ),
+        })
+    }
+    pub fn courier() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Courier"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Courier"), None, None, None),
+            ),
+        })
+    }
+    pub fn symbol() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Symbol"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Symbol"), None, None, None),
+            ),
+        })
+    }
+    pub fn times_bold() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Times−Bold"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Times−Bold"), None, None, None),
+            ),
+        })
+    }
+    pub fn helvetica_bold() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Helvetica−Bold"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Helvetica−Bold"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
+    pub fn Courier_Bold() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Courier−Bold"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Courier−Bold"), None, None, None),
+            ),
+        })
+    }
+    pub fn ZapfDingbats() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("ZapfDingbats"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("ZapfDingbats"), None, None, None),
+            ),
+        })
+    }
+    pub fn Times_Italic() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Times−Italic"),
+            object: Object::new(
+                0,
+                FontObject::new(FontType::Type1, Name::new("Times−Italic"), None, None, None),
+            ),
+        })
+    }
+    pub fn Helvetica_Oblique() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Helvetica−Oblique"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Helvetica−Oblique"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
+    pub fn Courier_Oblique() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Courier−Oblique"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Courier−Oblique"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
+    pub fn Times_BoldItalic() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Times−BoldItalic"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Times−BoldItalic"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
+    pub fn Helvetica_BoldOblique() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Helvetica−BoldOblique"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Helvetica−BoldOblique"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
+    pub fn Courier_BoldOblique() -> Rc<Self> {
+        Rc::new(Self {
+            name: Name::new("Courier−BoldOblique"),
+            object: Object::new(
+                0,
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Courier−BoldOblique"),
+                    None,
+                    None,
+                    None,
+                ),
+            ),
+        })
+    }
 }
 
 // Times−Roman
-//  Helvetica
-//  Courier
-//  Symbol
-// Times−Bold
-//  Helvetica−Bold
-//  Courier−Bold
-//  ZapfDingbats
-// Times−Italic
-//  Helvetica−Oblique
-//  Courier−Oblique
-// Times−BoldItalic
-//  Helvetica−BoldOblique
-//  Courier−BoldOblique
 
 mod pdfDocEncode {
     fn decode(c: u8) {

@@ -30,11 +30,9 @@ impl PDF {
             .pages
             .into_iter()
             .map(|p| {
-                let (page, contents) = p.render(pages.clone());
-                for obj in contents {
-                    pdf_writer.add_object(obj);
-                }
-                pdf_writer.add_object(page)})
+                let page = p.render(pages.clone(), &mut pdf_writer);
+                pdf_writer.add_object(page)
+            })
             .collect();
         pages.assign(Dict::from_vec(vec![
             ("Type", Name::new("Pages")),
@@ -71,10 +69,10 @@ impl Page {
     pub fn add(&mut self, g: &impl Graphic) {
         self.graphics.render(g);
     }
-    fn render(self, parent: Rc<Object>) -> (Rc<Object>, Vec<Rc<Object>>) {
-        let streams = self.graphics.compile();
+    fn render(self, parent: Rc<Object>, write: &mut pdf::PDFWrite) -> Rc<Object> {
+        let (streams, resources) = self.graphics.compile(write);
         if streams.len() == 1 {
-            (Object::new(
+            Object::new(
                 0,
                 Dict::from_vec(vec![
                     ("Type", Name::new("Page")),
@@ -84,17 +82,11 @@ impl Page {
                         graphics::Rect::new(0f64, 0f64, 612f64, 792f64).as_data(),
                     ),
                     ("Contents", streams[0].clone()),
-                    (
-                        "Resources",
-                        Dict::from_vec(vec![(
-                            "ProcSet",
-                            Rc::new(vec![Name::new("PDF"), Name::new("Text")]),
-                        )]),
-                    ),
+                    ("Resources", resources),
                 ]),
-            ), streams)
+            )
         } else {
-            (Object::new(
+            Object::new(
                 0,
                 Dict::from_vec(vec![
                     ("Type", Name::new("Page")),
@@ -104,23 +96,9 @@ impl Page {
                         graphics::Rect::new(0f64, 0f64, 612f64, 792f64).as_data(),
                     ),
                     ("Contents", Rc::new(streams.clone())),
-                    (
-                        "Resources",
-                        Dict::from_vec(vec![(
-                            "ProcSet",
-                            Rc::new(vec![Name::new("PDF"), Name::new("Text")]),
-                        )]),
-                    ),
+                    ("Resources", resources),
                 ]),
-            ), streams)
+            )
         }
-        
-        // /Type /Page
-        // /Parent 3 0 R
-        // /MediaBox [0 0 612 792]
-        // /Contents 5 0 R
-        // /Resources << /ProcSet 6 0 R
-        //                 /Font << /F1 7 0 R>>
-        //             >>
     }
 }

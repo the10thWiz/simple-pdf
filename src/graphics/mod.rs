@@ -1,10 +1,10 @@
+use crate::pdf::{Dict, Name, Object};
 use std::collections::LinkedList;
 use std::rc::Rc;
-use crate::pdf::{Name, Dict, Object};
 pub mod path;
 pub use path::Path;
 pub mod text;
-
+pub use text::{Font, Text};
 
 pub struct GraphicState {
     transform: (),
@@ -49,6 +49,8 @@ pub struct GraphicContext {
     stream: Vec<u8>,
     // Resource Dict
     resources: Rc<Dict>,
+    fonts: Rc<Dict>,
+    external_resources: Vec<Rc<Object>>,
 }
 impl GraphicContext {
     pub fn new() -> Self {
@@ -56,7 +58,12 @@ impl GraphicContext {
             current: GraphicState::new(),
             stack: LinkedList::new(),
             stream: vec![],
-            resources: Dict::new(),
+            resources: Dict::from_vec(vec![(
+                "ProcSet",
+                Rc::new(vec![Name::new("PDF"), Name::new("Text")]),
+            )]),
+            fonts: Dict::new(),
+            external_resources: vec![],
         }
     }
     pub fn render(&mut self, object: &impl Graphic) {
@@ -73,14 +80,29 @@ impl GraphicContext {
         self.stream.push(' ' as u8);
         self.stream.extend(operator.bytes());
     }
-    fn add_font(&mut self, f: text::Font) {
-        self.resources.add_entry(f.name(), f.object());
+    fn add_font(&mut self, f: Rc<text::Font>) {
+        self.fonts.add_entry(f.name(), f.object());
+        self.external_resources.push(f.object());
     }
-    pub fn compile(self) -> Vec<Rc<crate::pdf::Object>> {
-        vec![crate::pdf::Object::new(
+    pub fn compile(
+        self,
+        write: &mut crate::pdf::PDFWrite,
+    ) -> (Vec<Rc<crate::pdf::Object>>, Rc<crate::pdf::Dict>) {
+        if !self.fonts.is_empty() {
+            self.resources.add_entry("Font", self.fonts);
+        }
+
+        let streams = vec![crate::pdf::Object::new(
             0,
             crate::pdf::types::Stream::new(crate::pdf::Dict::new(), self.stream),
-        )]
+        )];
+        for obj in streams.iter().cloned() {
+            write.add_object(obj);
+        }
+        for obj in self.external_resources {
+            write.add_object(obj);
+        }
+        (streams, self.resources)
     }
 }
 
@@ -94,7 +116,7 @@ pub struct Parameter {
 impl From<&str> for Parameter {
     fn from(o: &str) -> Self {
         Self {
-            raw: format!("({})", o).bytes().collect()
+            raw: format!("({})", o).bytes().collect(),
         }
     }
 }
@@ -102,7 +124,14 @@ impl From<&str> for Parameter {
 impl From<&String> for Parameter {
     fn from(o: &String) -> Self {
         Self {
-            raw: format!("({})", o).bytes().collect()
+            raw: format!("({})", o).bytes().collect(),
+        }
+    }
+}
+impl From<String> for Parameter {
+    fn from(o: String) -> Self {
+        Self {
+            raw: format!("({})", o).bytes().collect(),
         }
     }
 }
@@ -110,14 +139,14 @@ impl From<&String> for Parameter {
 impl From<usize> for Parameter {
     fn from(o: usize) -> Self {
         Self {
-            raw: o.to_string().bytes().collect()
+            raw: o.to_string().bytes().collect(),
         }
     }
 }
 impl From<f64> for Parameter {
     fn from(o: f64) -> Self {
         Self {
-            raw: o.to_string().bytes().collect()
+            raw: o.to_string().bytes().collect(),
         }
     }
 }
@@ -158,7 +187,7 @@ impl From<Rect> for Parameter {
 impl From<Rc<Name>> for Parameter {
     fn from(r: Rc<Name>) -> Self {
         Self {
-            raw: r.to_string().bytes().collect()
+            raw: r.to_string().bytes().collect(),
         }
     }
 }

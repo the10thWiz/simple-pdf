@@ -3,50 +3,113 @@ use crate::pdf::{Dict, Name, Object, PDFData};
 use std::io::{self, Write};
 use std::rc::Rc;
 
+enum Update<T> {
+    New(T),
+    Old(T),
+}
+impl<T> Update<T> {
+    fn unwrap(&self) -> &T {
+        match self {
+            Self::New(d) => d,
+            Self::Old(d) => d,
+        }
+    }
+}
+impl<T: Clone + PartialEq<T>> Update<T> {
+    fn update(&mut self) -> Option<T> {
+        match self {
+            Self::New(d) => {
+                let tmp = Some(d.clone());
+                *self = Self::Old(d.clone());
+                tmp
+            }
+            Self::Old(..) => None,
+        }
+    }
+    fn replace(&mut self, new: T) {
+        match self {
+            Self::New(..) => *self = Self::New(new),
+            Self::Old(d) => {
+                if d != &new {
+                    *self = Self::New(new);
+                }
+            }
+        }
+    }
+}
+impl<T: PartialEq<T>> PartialEq for Update<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::New(s), Self::New(o)) => s == o,
+            (Self::Old(s), Self::Old(o)) => s == o,
+            _ => false,
+        }
+    }
+}
+
+#[derive(PartialEq)]
 struct TextPart {
     text: String,
     font: Option<(Rc<Font>, f64)>,
     pos: Option<Point>,
 }
 
+#[derive(PartialEq)]
 pub struct Text {
     parts: Vec<TextPart>,
-    font: Option<(Rc<Font>, f64)>,
-    pos: Option<Point>,
+    font: Update<(Rc<Font>, f64)>,
+    pos: Update<Point>,
 }
 
 impl Text {
     pub fn new(font: Rc<Font>, size: f64) -> Self {
         Self {
             parts: vec![],
-            font: Some((font, size)),
-            pos: Some((0f64, 0f64).into()),
+            font: Update::New((font, size)),
+            pos: Update::New((0f64, 0f64).into()),
         }
     }
     pub fn move_to(mut self, p: impl Into<Point>) -> Self {
-        self.pos = Some(p.into());
+        self.pos.replace(p.into());
         self
     }
     pub fn with_font(mut self, font: Rc<Font>, size: f64) -> Self {
-        self.font = Some((font, size));
+        self.font.replace((font, size));
+        self
+    }
+    pub fn font_size(mut self, size: f64) -> Self {
+        self.font.replace((self.font.unwrap().0.clone(), size));
         self
     }
     pub fn text(mut self, p: impl Into<String>) -> Self {
         self.parts.push(TextPart {
             text: p.into(),
-            font: self.font.take(),
-            pos: self.pos.take(),
+            font: self.font.update(),
+            pos: self.pos.update(),
         });
         self
     }
+    pub fn fill(mut self, color: Color) -> GraphicText {
+        GraphicText {
+            parts: self.parts,
+            fill: Some(color),
+            stroke: None,
+        }
+    }
 }
 
-impl Graphic for Text {
+pub struct GraphicText {
+    parts: Vec<TextPart>,
+    stroke: Option<Color>,
+    fill: Option<Color>,
+}
+
+impl Graphic for GraphicText {
     fn fill_color(&self) -> Option<Color> {
-        None
+        self.fill
     }
     fn stroke_color(&self) -> Option<Color> {
-        None
+        self.stroke
     }
     fn render(&self, out: &mut GraphicContext) {
         out.command(&mut [], "BT");
@@ -80,9 +143,14 @@ struct FontObject {
     // /Type /Font
     subtype: FontType,
     base_font: Rc<Name>,
+    // optional only for standard 14 fonts
     first_char: Option<Object>,
     last_char: Option<Object>,
     widths: Option<Object>,
+    font_descriptor: Option<Object>,
+    // Fully optional
+    encoding: Option<Object>,
+    to_unicode: Option<Object>,
 }
 impl FontObject {
     fn new(
@@ -91,6 +159,9 @@ impl FontObject {
         first_char: Option<Object>,
         last_char: Option<Object>,
         widths: Option<Object>,
+        font_descriptor: Option<Object>,
+        encoding: Option<Object>,
+        to_unicode: Option<Object>,
     ) -> Rc<Self> {
         Rc::new(Self {
             subtype,
@@ -98,6 +169,9 @@ impl FontObject {
             first_char,
             last_char,
             widths,
+            font_descriptor,
+            encoding,
+            to_unicode,
         })
     }
 }
@@ -111,6 +185,7 @@ impl PDFData for FontObject {
         .write(o)
     }
 }
+
 pub struct Font {
     name: Rc<Name>,
     object: Rc<Object>,
@@ -130,7 +205,16 @@ impl Font {
             name: Name::new("timesroman"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Times-Roman"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Times-Roman"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -140,7 +224,16 @@ impl Font {
             name: Name::new("helvetica"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Helvetica"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Helvetica"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -150,7 +243,16 @@ impl Font {
             name: Name::new("courier"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Courier"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Courier"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -160,7 +262,16 @@ impl Font {
             name: Name::new("symbol"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Symbol"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Symbol"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -170,7 +281,16 @@ impl Font {
             name: Name::new("timesbold"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Times−Bold"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Times−Bold"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -186,6 +306,9 @@ impl Font {
                     None,
                     None,
                     None,
+                    None,
+                    None,
+                    None,
                 ),
             ),
         })
@@ -196,7 +319,16 @@ impl Font {
             name: Name::new("courierbold"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Courier−Bold"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Courier−Bold"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -206,7 +338,16 @@ impl Font {
             name: Name::new("zapfdingbats"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("ZapfDingbats"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("ZapfDingbats"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -216,7 +357,16 @@ impl Font {
             name: Name::new("timesitalic"),
             object: Object::new(
                 0,
-                FontObject::new(FontType::Type1, Name::new("Times−Italic"), None, None, None),
+                FontObject::new(
+                    FontType::Type1,
+                    Name::new("Times−Italic"),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             ),
         })
     }
@@ -229,6 +379,9 @@ impl Font {
                 FontObject::new(
                     FontType::Type1,
                     Name::new("helveticaoblique"),
+                    None,
+                    None,
+                    None,
                     None,
                     None,
                     None,
@@ -248,6 +401,9 @@ impl Font {
                     None,
                     None,
                     None,
+                    None,
+                    None,
+                    None,
                 ),
             ),
         })
@@ -261,6 +417,9 @@ impl Font {
                 FontObject::new(
                     FontType::Type1,
                     Name::new("Times−BoldItalic"),
+                    None,
+                    None,
+                    None,
                     None,
                     None,
                     None,
@@ -280,6 +439,9 @@ impl Font {
                     None,
                     None,
                     None,
+                    None,
+                    None,
+                    None,
                 ),
             ),
         })
@@ -296,13 +458,19 @@ impl Font {
                     None,
                     None,
                     None,
+                    None,
+                    None,
+                    None,
                 ),
             ),
         })
     }
 }
-
-// Times−Roman
+impl PartialEq for Font {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
 
 mod pdf_doc_encode {
     #[allow(unused)]

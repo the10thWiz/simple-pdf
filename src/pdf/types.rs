@@ -22,7 +22,7 @@ impl PDFData for [std::string::String; 2] {
         write!(o, "[{}, {}]", self[0], self[1])
     }
 }
-impl<T: PDFData> PDFData for Vec<Rc<T>> {
+impl<T: PDFData + ?Sized> PDFData for Vec<Rc<T>> {
     fn write(&self, o: &mut dyn Write) -> Result<()> {
         write!(o, "[")?;
         let mut iter = self.iter();

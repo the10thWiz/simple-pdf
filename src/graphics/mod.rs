@@ -5,6 +5,7 @@ pub mod path;
 pub use path::Path;
 pub mod text;
 pub use text::{Font, Text};
+pub mod context;
 
 pub struct GraphicState {
     transform: (),
@@ -45,6 +46,7 @@ pub struct GraphicContext {
     // Mutable state
     current: GraphicState,
     stack: LinkedList<GraphicState>,
+    // Output stream
     stream: Vec<u8>,
     // Resource Dict
     resources: Rc<Dict>,
@@ -86,12 +88,15 @@ impl GraphicContext {
     pub fn compile(
         self,
         write: &mut crate::pdf::PDFWrite,
-    ) -> (Vec<Rc<crate::pdf::Object>>, Rc<crate::pdf::Dict>) {
+    ) -> (
+        Vec<Rc<crate::pdf::ObjRef<crate::pdf::types::Stream>>>,
+        Rc<crate::pdf::Dict>,
+    ) {
         if !self.fonts.is_empty() {
             self.resources.add_entry("Font", self.fonts);
         }
 
-        let streams = vec![crate::pdf::Object::new(
+        let streams = vec![crate::pdf::ObjRef::new(
             0,
             crate::pdf::types::Stream::new(crate::pdf::Dict::new(), self.stream),
         )];

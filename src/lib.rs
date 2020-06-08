@@ -1,56 +1,70 @@
+use std::boxed::Box;
 use std::rc::Rc;
 
 pub mod graphics;
 use graphics::{Graphic, GraphicContext};
-pub mod pdf;
-use pdf::{Dict, Name, Object};
+mod pdf;
+use pdf::{Dict, Name, ObjRef, Object, PDFData};
 
 pub struct PDF {
     pages: Vec<Page>,
+    writer: pdf::PDFWrite,
+    catalog: Rc<ObjRef<Dict>>,
+    outlines: Rc<ObjRef<Dict>>,
+    pages_obj: Rc<ObjRef<Dict>>,
 }
 
 impl PDF {
-    pub fn new() -> Self {
-        Self { pages: vec![] }
-    }
-    pub fn add_page(&mut self, page: Page) {
-        self.pages.push(page);
-    }
-    pub fn write(self, out: &mut dyn std::io::Write) -> std::io::Result<()> {
-        let mut pdf_writer = pdf::PDFWrite::new();
-        /* << /Type /Outlines
-            /Count 0
-        >> */
-        let outlines = Object::new(
+    /// Creates a new PDF file with the given output writer
+    pub fn new(out: Box<dyn std::io::Write>) -> Self {
+        let mut writer = pdf::PDFWrite::new(out);
+        let outlines = ObjRef::new(
             0,
             Dict::from_vec(vec![("Type", Name::new("Outlines")), ("Count", Rc::new(0))]),
         );
-        let pages = Object::empty(0);
-        let p: Vec<Rc<Object>> = self
+        writer.add_object(outlines.clone());
+        let pages_obj = ObjRef::new(0, Dict::from_vec(vec![("Type", Name::new("Pages"))]));
+        writer.add_object(pages_obj.clone());
+        Self {
+            pages: vec![],
+            catalog: writer.create_root(Dict::from_vec(vec![
+                ("Type", Name::new("Catalog")),
+                ("Outlines", outlines.clone()),
+                ("Pages", pages_obj.clone()),
+            ])),
+            outlines,
+            pages_obj,
+            writer,
+        }
+    }
+    /// Creates a new PDF file, using the file as a writer to write to
+    pub fn from_file(file: std::fs::File) -> Self {
+        Self::new(Box::new(file))
+    }
+    /// Adds a page to the PDF
+    ///
+    /// The page is consumed, and may (or may not)
+    /// be written to the output right away.
+    pub fn add_page(&mut self, page: Page) {
+        self.pages.push(page);
+    }
+    /// Completes the writing process
+    ///
+    /// TODO: this may be added to a drop implementation
+    pub fn write(mut self) -> std::io::Result<()> {
+        let (pg_obj, tmp) = (&mut self.pages_obj, &mut self.writer);
+        let p: Vec<Rc<dyn Object>> = self
             .pages
             .into_iter()
             .map(|p| {
-                let page = p.render(pages.clone(), &mut pdf_writer);
-                pdf_writer.add_object(page)
+                let page = p.render(pg_obj.clone(), tmp);
+                tmp.add_object(page)
             })
             .collect();
-        pages.assign(Dict::from_vec(vec![
-            ("Type", Name::new("Pages")),
-            ("Count", Rc::new(p.len())),
-            ("Kids", Rc::new(p)),
-        ]));
-        let catalog = Object::new(
-            0,
-            Dict::from_vec(vec![
-                ("Type", Name::new("Catalog")),
-                ("Outlines", outlines.clone()),
-                ("Pages", pages.clone()),
-            ]),
-        );
-        pdf_writer.add_object(outlines);
-        pdf_writer.set_root(catalog);
-        pdf_writer.add_object(pages);
-        pdf_writer.write(out)
+        self.pages_obj.add_entry("Count", Rc::new(p.len()));
+        self.pages_obj.add_entry("Kids", Rc::new(p));
+
+        self.writer.write()
     }
 }
 
@@ -69,10 +83,10 @@ impl Page {
     pub fn add(&mut self, g: Rc<impl Graphic>) {
         self.graphics.render(g);
     }
-    fn render(self, parent: Rc<Object>, write: &mut pdf::PDFWrite) -> Rc<Object> {
+    fn render(self, parent: Rc<dyn PDFData>, write: &mut pdf::PDFWrite) -> Rc<dyn Object> {
         let (streams, resources) = self.graphics.compile(write);
         if streams.len() == 1 {
-            Object::new(
+            ObjRef::new(
                 0,
                 Dict::from_vec(vec![
                     ("Type", Name::new("Page")),
@@ -86,7 +100,7 @@ impl Page {
                 ]),
             )
         } else {
-            Object::new(
+            ObjRef::new(
                 0,
                 Dict::from_vec(vec![
                     ("Type", Name::new("Page")),

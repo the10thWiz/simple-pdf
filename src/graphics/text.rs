@@ -1,5 +1,5 @@
 use super::{Color, Graphic, GraphicContext, Point};
-use crate::pdf::{Dict, Name, Object, PDFData};
+use crate::pdf::{Dict, Name, ObjRef, PDFData};
 use std::io::{self, Write};
 use std::rc::Rc;
 
@@ -98,6 +98,10 @@ impl Text {
     }
 }
 
+// TODO:
+// Use utf-16 with BOM '254u8', '255u8'
+// .encode_utf16() for iter, flat map to spilt bytes
+
 pub struct GraphicText {
     parts: Vec<TextPart>,
     stroke: Option<Color>,
@@ -139,29 +143,29 @@ impl FontType {
         }
     }
 }
-struct FontObject {
+pub struct FontObject {
     // /Type /Font
     subtype: FontType,
     base_font: Rc<Name>,
     // optional only for standard 14 fonts
-    first_char: Option<Object>,
-    last_char: Option<Object>,
-    widths: Option<Object>,
-    font_descriptor: Option<Object>,
+    first_char: Option<ObjRef<usize>>,
+    last_char: Option<ObjRef<usize>>,
+    widths: Option<ObjRef<usize>>,
+    font_descriptor: Option<ObjRef<usize>>,
     // Fully optional
-    encoding: Option<Object>,
-    to_unicode: Option<Object>,
+    encoding: Option<ObjRef<usize>>,
+    to_unicode: Option<ObjRef<usize>>,
 }
 impl FontObject {
     fn new(
         subtype: FontType,
         base_font: Rc<Name>,
-        first_char: Option<Object>,
-        last_char: Option<Object>,
-        widths: Option<Object>,
-        font_descriptor: Option<Object>,
-        encoding: Option<Object>,
-        to_unicode: Option<Object>,
+        first_char: Option<ObjRef<usize>>,
+        last_char: Option<ObjRef<usize>>,
+        widths: Option<ObjRef<usize>>,
+        font_descriptor: Option<ObjRef<usize>>,
+        encoding: Option<ObjRef<usize>>,
+        to_unicode: Option<ObjRef<usize>>,
     ) -> Rc<Self> {
         Rc::new(Self {
             subtype,
@@ -188,7 +192,7 @@ impl PDFData for FontObject {
 
 pub struct Font {
     name: Rc<Name>,
-    object: Rc<Object>,
+    object: Rc<ObjRef<FontObject>>,
 }
 impl Font {
     /// Internal Object for constructing pdf
@@ -196,14 +200,14 @@ impl Font {
         self.name.clone()
     }
     /// Internal Object for constructing pdf
-    pub fn object(&self) -> Rc<Object> {
+    pub fn object(&self) -> Rc<ObjRef<FontObject>> {
         self.object.clone()
     }
     /// One of the 14 standard fonts
     pub fn times_new_roman() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesroman"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -222,7 +226,7 @@ impl Font {
     pub fn helvetica() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("helvetica"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -241,7 +245,7 @@ impl Font {
     pub fn courier() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("courier"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -260,7 +264,7 @@ impl Font {
     pub fn symbol() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("symbol"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -279,7 +283,7 @@ impl Font {
     pub fn times_bold() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesbold"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -298,7 +302,7 @@ impl Font {
     pub fn helvetica_bold() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("helveticabold"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -317,7 +321,7 @@ impl Font {
     pub fn courier_bold() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("courierbold"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -336,7 +340,7 @@ impl Font {
     pub fn zapf_dingbats() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("zapfdingbats"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -355,7 +359,7 @@ impl Font {
     pub fn times_italic() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesitalic"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -374,7 +378,7 @@ impl Font {
     pub fn helvetica_oblique() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("helveticaoblique"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -393,7 +397,7 @@ impl Font {
     pub fn courier_oblique() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("courieroblique"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -412,7 +416,7 @@ impl Font {
     pub fn times_bold_italic() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("timesbolditalic"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -431,7 +435,7 @@ impl Font {
     pub fn helvetica_bold_oblique() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("helveticaboldoblique"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,
@@ -450,7 +454,7 @@ impl Font {
     pub fn courier_bold_oblique() -> Rc<Self> {
         Rc::new(Self {
             name: Name::new("courierboldoblique"),
-            object: Object::new(
+            object: ObjRef::new(
                 0,
                 FontObject::new(
                     FontType::Type1,

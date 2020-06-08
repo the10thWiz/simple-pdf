@@ -1,17 +1,17 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::io::{self, Write};
 use std::rc::Rc;
 
 pub mod types;
 pub use types::{Dict, Name, PDFData};
 
-struct Output<T: Write> {
-    output: T,
+pub struct Output {
+    output: Box<dyn Write>,
     pos: usize,
 }
 
-impl<T: Write> Output<T> {
-    pub fn new(output: T) -> Self {
+impl Output {
+    pub fn new(output: Box<dyn Write>) -> Self {
         Self { output, pos: 0 }
     }
     pub fn get_pos(&self) -> usize {
@@ -19,7 +19,7 @@ impl<T: Write> Output<T> {
     }
 }
 
-impl<T: Write> Write for Output<T> {
+impl Write for Output {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let tmp = self.output.write(buf);
         if let Ok(num) = tmp {
@@ -32,7 +32,7 @@ impl<T: Write> Write for Output<T> {
     }
 }
 
-struct CRT {
+pub struct CRT {
     entries: Vec<(usize, usize, usize, bool)>,
     size: usize,
 }
@@ -94,63 +94,61 @@ impl CRT {
     }
 }
 
-pub enum Object {
-    Indirect {
-        num: Cell<Option<usize>>,
-        gen: usize,
-        data: RefCell<Option<Rc<dyn PDFData>>>,
-    },
-    Direct {
-        data: RefCell<Option<Rc<dyn PDFData>>>,
-    },
-}
-enum ObjError {
+pub enum ObjError {
     AlreadyAssigned,
     DirectObject,
 }
+pub trait Object: PDFData {
+    fn write_obj(&self, crt: &mut CRT, out: &mut Output) -> io::Result<()>;
+    fn assign_num(&self, num: usize) -> Result<(), ObjError>;
+    fn is_indirect(&self) -> bool;
+}
+pub enum ObjRef<T: PDFData> {
+    Indirect {
+        num: Cell<Option<usize>>,
+        gen: usize,
+        data: Rc<T>,
+    },
+    Direct {
+        data: Rc<T>,
+    },
+}
 
-impl Object {
-    pub fn new(gen: usize, data: Rc<dyn PDFData>) -> Rc<Self> {
+impl<T: PDFData> ObjRef<T> {
+    pub fn new(gen: usize, data: Rc<T>) -> Rc<Self> {
         Rc::new(Self::Indirect {
             num: Cell::new(None),
             gen,
-            data: RefCell::new(Some(data)),
+            data: data,
         })
     }
-    pub fn empty(gen: usize) -> Rc<Self> {
-        Rc::new(Self::Indirect {
-            num: Cell::new(None),
-            gen,
-            data: RefCell::new(None),
-        })
-    }
-    pub fn assign(&self, new_data: Rc<dyn PDFData>) {
+}
+impl<T: PDFData> std::ops::Deref for ObjRef<T> {
+    type Target = Rc<T>;
+    fn deref(&self) -> &Self::Target {
         match self {
-            Self::Indirect { data, .. } => {
-                let mut it = data.borrow_mut();
-                if let Some(_) = it.as_ref() {
-                    panic!("Already assigned some data");
-                }
-                *it = Some(new_data);
-            }
-            Self::Direct { data } => {
-                let mut it = data.borrow_mut();
-                if let Some(_) = it.as_ref() {
-                    panic!("Already assigned some data");
-                }
-                *it = Some(new_data);
+            Self::Direct { data } => &data,
+            Self::Indirect { data, .. } => &data,
+        }
+    }
+}
+impl<T: PDFData> PDFData for ObjRef<T> {
+    fn write(&self, o: &mut dyn Write) -> io::Result<()> {
+        match self {
+            Self::Direct { data } => data.write(o),
+            Self::Indirect { num, gen, .. } => {
+                write!(o, "{} {} R", num.get().expect("No number assigned"), gen)
             }
         }
     }
-    fn write_obj<T: Write>(&self, crt: &mut CRT, out: &mut Output<T>) -> io::Result<()> {
+}
+impl<T: PDFData> Object for ObjRef<T> {
+    fn write_obj(&self, crt: &mut CRT, out: &mut Output) -> io::Result<()> {
         match self {
             Self::Indirect { num, gen, data } => {
                 crt.add_entry(out.get_pos(), num.get().expect("No num"), *gen, false);
                 write!(out, "{} {} obj\n", num.get().unwrap(), gen)?;
-                data.borrow()
-                    .as_ref()
-                    .expect("Object has no data")
-                    .write(out)?;
+                data.write(out)?;
                 write!(out, "endobj\n")
             }
             Self::Direct { .. } => {
@@ -160,46 +158,40 @@ impl Object {
     }
     fn assign_num(&self, new_num: usize) -> Result<(), ObjError> {
         match self {
+            Self::Direct { .. } => Err(ObjError::DirectObject),
             Self::Indirect { num, .. } => {
                 if let Some(_) = num.get() {
-                    return Err(ObjError::AlreadyAssigned);
+                    Err(ObjError::AlreadyAssigned)
+                } else {
+                    num.set(Some(new_num));
+                    Ok(())
                 }
-                num.set(Some(new_num));
-            }
-            Self::Direct { .. } => {
-                return Err(ObjError::DirectObject);
             }
         }
-        Ok(())
     }
-}
-impl PDFData for Object {
-    fn write(&self, o: &mut dyn Write) -> io::Result<()> {
+    fn is_indirect(&self) -> bool {
         match self {
-            Self::Indirect { num, gen, .. } => write!(
-                o,
-                "{} {} R",
-                num.get().expect("Object not added to pdf"),
-                gen
-            ),
-            Self::Direct { data } => data.borrow().as_ref().expect("Object has no data").write(o),
+            Self::Direct { .. } => false,
+            Self::Indirect { .. } => true,
         }
     }
 }
 
 pub struct PDFWrite {
-    objects: Vec<Rc<Object>>,
+    objects: Vec<Rc<dyn Object>>,
     cur_num: usize,
     trailer: Trailer,
+    output: Output,
 }
 
 impl PDFWrite {
-    pub fn new() -> Self {
+    pub fn new(output: Box<dyn std::io::Write>) -> Self {
         Self {
             objects: vec![],
             // The object number 0 is reserved
             cur_num: 1,
             trailer: Trailer::new(),
+            output: Output::new(output),
         }
     }
     /// Add an object the final PDF file
@@ -210,7 +202,7 @@ impl PDFWrite {
     ///
     /// panics if the object has already been added to
     /// the pdf file
-    pub fn add_object(&mut self, o: Rc<Object>) -> Rc<Object> {
+    pub fn add_object(&mut self, o: Rc<dyn Object>) -> Rc<dyn Object> {
         match o.assign_num(self.cur_num) {
             Ok(()) => {
                 self.objects.push(o.clone());
@@ -228,30 +220,27 @@ impl PDFWrite {
     ///
     /// panics if the object has already been added to
     /// the pdf file
-    pub fn set_root(&mut self, o: Rc<Object>) {
-        match o.as_ref() {
-            Object::Indirect { .. } => {
-                if let Some(_) = self.trailer.root {
-                    panic!("An object is already root");
-                }
-                self.add_object(o.clone());
-                self.trailer.root = Some(o);
-            }
-            _ => panic!("Root must be indirect object"),
+    pub fn create_root<T: 'static + PDFData>(&mut self, root: Rc<T>) -> Rc<ObjRef<T>> {
+        if let Some(_) = self.trailer.root {
+            panic!("An object is already root");
         }
+        let o = ObjRef::new(0, root);
+        self.add_object(o.clone());
+        self.trailer.root = Some(o.clone());
+        o
     }
-    pub fn write(mut self, o: &mut dyn Write) -> io::Result<()> {
-        let mut output = Output::new(o);
-        write!(output, "%PDF-1.4\n%����\n")?;
+    pub fn write(mut self) -> io::Result<()> {
+        // let mut output = Output::new(o);
+        write!(self.output, "%PDF-1.4\n%����\n")?;
         let mut crt = CRT::new();
         for obj in self.objects.iter() {
-            obj.write_obj(&mut crt, &mut output)?;
+            obj.write_obj(&mut crt, &mut self.output)?;
         }
         self.trailer.size = Some(crt.get_size());
-        let startxref = output.get_pos();
-        crt.write(&mut output)?;
-        self.trailer.write(&mut output)?;
-        write!(output, "startxref\n{}\n%%EOF", startxref)
+        let startxref = self.output.get_pos();
+        crt.write(&mut self.output)?;
+        self.trailer.write(&mut self.output)?;
+        write!(self.output, "startxref\n{}\n%%EOF", startxref)
     }
 }
 
@@ -260,8 +249,8 @@ struct Trailer {
     //   /Root 1 0 R
     //   /ID [<8=1b14aafa313db63dbd6f981e49f94f4> <81b14aafa313db63dbd6f981e49f94f4>]
     size: Option<usize>,
-    root: Option<Rc<Object>>,
-    info: Option<Rc<Object>>,
+    root: Option<Rc<dyn PDFData>>,
+    info: Option<Rc<dyn PDFData>>,
     id: Option<Rc<[String; 2]>>,
 }
 

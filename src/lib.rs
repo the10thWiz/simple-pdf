@@ -56,10 +56,7 @@ impl PDF {
         let p: Vec<Rc<dyn Object>> = self
             .pages
             .into_iter()
-            .map(|p| {
-                let page = p.render(pg_obj.clone(), tmp);
-                tmp.add_object(page)
-            })
+            .map(|p| tmp.add_object(p.render(pg_obj.clone())))
             .collect();
         self.pages_obj.add_entry("Count", Rc::new(p.len()));
         self.pages_obj.add_entry("Kids", Rc::new(p));
@@ -83,8 +80,8 @@ impl Page {
     pub fn add(&mut self, g: Rc<impl Graphic>) {
         self.graphics.render(g);
     }
-    fn render(self, parent: Rc<dyn PDFData>, write: &mut pdf::PDFWrite) -> Rc<dyn Object> {
-        let (streams, resources) = self.graphics.compile(write);
+    fn render(self, parent: Rc<dyn PDFData>) -> Rc<dyn Object> {
+        let (streams, resources) = self.graphics.compile();
         if streams.len() == 1 {
             ObjRef::new(
                 0,

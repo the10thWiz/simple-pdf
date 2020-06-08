@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::fmt::Debug;
 use std::io::{self, Write};
 use std::rc::Rc;
 
@@ -98,7 +99,7 @@ pub enum ObjError {
     AlreadyAssigned,
     DirectObject,
 }
-pub trait Object: PDFData {
+pub trait Object: PDFData + Debug {
     fn write_obj(&self, crt: &mut CRT, out: &mut Output) -> io::Result<()>;
     fn assign_num(&self, num: usize) -> Result<(), ObjError>;
     fn is_indirect(&self) -> bool;
@@ -142,7 +143,7 @@ impl<T: PDFData> PDFData for ObjRef<T> {
         }
     }
 }
-impl<T: PDFData> Object for ObjRef<T> {
+impl<T: PDFData + Debug> Object for ObjRef<T> {
     fn write_obj(&self, crt: &mut CRT, out: &mut Output) -> io::Result<()> {
         match self {
             Self::Indirect { num, gen, data } => {
@@ -173,6 +174,22 @@ impl<T: PDFData> Object for ObjRef<T> {
         match self {
             Self::Direct { .. } => false,
             Self::Indirect { .. } => true,
+        }
+    }
+}
+impl<T: PDFData + Debug> Debug for ObjRef<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Direct { data } => Debug::fmt(data, f),
+            Self::Indirect { num, gen, data } => {
+                if let Some(d) = num.get() {
+                    write!(f, "{}", d)?;
+                } else {
+                    write!(f, "?")?;
+                }
+                writeln!(f, " {} Object", gen)?;
+                Debug::fmt(data, f)
+            }
         }
     }
 }
@@ -211,6 +228,9 @@ impl PDFWrite {
             Err(ObjError::AlreadyAssigned) => {}
             Err(ObjError::DirectObject) => {}
         }
+        for obj in o.dependent_objects() {
+            self.add_object(obj);
+        }
         o
     }
     /// Add an object the final PDF file, and sets
@@ -243,7 +263,7 @@ impl PDFWrite {
         write!(self.output, "startxref\n{}\n%%EOF", startxref)
     }
 }
-
+#[derive(Debug)]
 struct Trailer {
     // /Size 8
     //   /Root 1 0 R

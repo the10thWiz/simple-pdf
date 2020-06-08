@@ -1,10 +1,14 @@
+use super::Object;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{Result, Write};
 use std::rc::Rc;
 
-pub trait PDFData {
+pub trait PDFData: std::fmt::Debug {
     fn write(&self, o: &mut dyn Write) -> Result<()>;
+    fn dependent_objects(&self) -> Vec<Rc<dyn Object>> {
+        vec![]
+    }
 }
 
 impl PDFData for usize {
@@ -34,6 +38,13 @@ impl<T: PDFData + ?Sized> PDFData for Vec<Rc<T>> {
             }
         }
         write!(o, "]")
+    }
+    fn dependent_objects(&self) -> Vec<Rc<dyn Object>> {
+        let mut tmp = vec![];
+        for obj in self.iter() {
+            tmp.extend(obj.dependent_objects());
+        }
+        tmp
     }
 }
 
@@ -70,6 +81,7 @@ impl PDFData for Name {
     }
 }
 
+#[derive(Debug)]
 pub struct Dict {
     items: RefCell<HashMap<Name, Rc<dyn PDFData>>>,
 }
@@ -96,6 +108,9 @@ impl Dict {
             self.items.borrow_mut().insert(n.into(), data);
         }
     }
+    pub fn get_entry(&self, n: impl Into<Name>) -> Option<Rc<dyn PDFData>> {
+        self.items.borrow_mut().get(&n.into()).cloned()
+    }
     pub fn is_empty(&self) -> bool {
         self.items.borrow().is_empty()
     }
@@ -111,8 +126,15 @@ impl PDFData for Dict {
         }
         write!(o, ">>\n")
     }
+    fn dependent_objects(&self) -> Vec<Rc<dyn Object>> {
+        let mut tmp = vec![];
+        for obj in self.items.borrow().values() {
+            tmp.extend(obj.dependent_objects());
+        }
+        tmp
+    }
 }
-
+#[derive(Debug)]
 pub struct Stream {
     meta: Rc<Dict>,
     data: Vec<u8>,
@@ -122,6 +144,9 @@ impl Stream {
     pub fn new(meta: Rc<Dict>, data: Vec<u8>) -> Rc<Self> {
         meta.add_entry("Length", Rc::new(data.len()));
         Rc::new(Self { meta, data })
+    }
+    pub fn add_entry(&self, n: impl Into<Name>, data: Rc<dyn PDFData>) {
+        self.meta.add_entry(n, data);
     }
 }
 

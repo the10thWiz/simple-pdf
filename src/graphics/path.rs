@@ -1,4 +1,4 @@
-use super::{Color, Graphic, GraphicContext, Point, Rect};
+use super::{Color, Graphic, GraphicContext, GraphicParameters, Point, Rect};
 use std::rc::Rc;
 
 #[derive(Clone, Debug, Copy)]
@@ -23,6 +23,13 @@ pub struct Path {
 }
 
 impl Path {
+    /// Starts a new path
+    pub fn new() -> Self {
+        Self {
+            path: vec![],
+            cur: Some(vec![]),
+        }
+    }
     /// Starts a new path from the given point
     ///
     /// - point: see Point
@@ -144,9 +151,10 @@ impl Path {
                 .push(SubPath::Parts(self.cur.take().unwrap(), false));
         }
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(None, Some(color)),
             path: self.path,
-            stroke: Some(color),
-            fill: None,
+            stroke: true,
+            fill: false,
             even_odd: false,
         })
     }
@@ -165,9 +173,10 @@ impl Path {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(Some(color), None),
             path: self.path,
-            stroke: None,
-            fill: Some(color),
+            stroke: false,
+            fill: true,
             even_odd: false,
         })
     }
@@ -186,9 +195,10 @@ impl Path {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(Some(fill), Some(stroke)),
             path: self.path,
-            stroke: Some(stroke),
-            fill: Some(fill),
+            stroke: true,
+            fill: true,
             even_odd: false,
         })
     }
@@ -210,9 +220,10 @@ impl Path {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(None, Some(color)),
             path: self.path,
-            stroke: Some(color),
-            fill: None,
+            stroke: true,
+            fill: false,
             even_odd: true,
         })
     }
@@ -235,9 +246,10 @@ impl Path {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(Some(color), None),
             path: self.path,
-            stroke: None,
-            fill: Some(color),
+            stroke: false,
+            fill: true,
             even_odd: true,
         })
     }
@@ -260,26 +272,25 @@ impl Path {
         self.path
             .push(SubPath::Parts(self.cur.take().unwrap(), false));
         Rc::new(GraphicPath {
+            params: GraphicParameters::with_colors(Some(fill), Some(stroke)),
             path: self.path,
-            stroke: Some(stroke),
-            fill: Some(fill),
+            stroke: true,
+            fill: true,
             even_odd: true,
         })
     }
 }
 #[derive(Debug)]
 pub struct GraphicPath {
+    params: GraphicParameters,
     path: Vec<SubPath>,
-    stroke: Option<Color>,
-    fill: Option<Color>,
+    stroke: bool,
+    fill: bool,
     even_odd: bool,
 }
 impl Graphic for GraphicPath {
-    fn fill_color(&self) -> Option<Color> {
-        self.fill
-    }
-    fn stroke_color(&self) -> Option<Color> {
-        self.stroke
+    fn get_graphics_parameters(&self) -> &GraphicParameters {
+        &self.params
     }
     fn render(&self, g: &mut GraphicContext) {
         for subpath in &self.path {
@@ -308,22 +319,22 @@ impl Graphic for GraphicPath {
             }
         }
         match (self.fill, self.stroke) {
-            (Some(..), Some(..)) => {
+            (true, true) => {
                 if self.even_odd {
                     g.command(&mut [], "B*")
                 } else {
                     g.command(&mut [], "B")
                 }
             }
-            (None, Some(..)) => g.command(&mut [], "S"),
-            (Some(..), None) => {
+            (false, true) => g.command(&mut [], "S"),
+            (true, false) => {
                 if self.even_odd {
                     g.command(&mut [], "f*")
                 } else {
                     g.command(&mut [], "f")
                 }
             }
-            (None, None) => unreachable!(),
+            (false, false) => unreachable!(),
         }
     }
 }

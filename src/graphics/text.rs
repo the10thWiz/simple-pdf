@@ -1,8 +1,9 @@
-use super::{Color, Graphic, GraphicContext, Point};
+use super::{Color, Graphic, GraphicContext, GraphicParameters, Point};
 use crate::pdf::{Dict, Name, ObjRef, PDFData};
 use std::io::{self, Write};
 use std::rc::Rc;
 
+#[derive(Debug)]
 enum Update<T> {
     New(T),
     Old(T),
@@ -47,14 +48,14 @@ impl<T: PartialEq<T>> PartialEq for Update<T> {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 struct TextPart {
     text: String,
     font: Option<(Rc<Font>, f64)>,
     pos: Option<Point>,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub struct Text {
     parts: Vec<TextPart>,
     font: Update<(Rc<Font>, f64)>,
@@ -92,8 +93,9 @@ impl Text {
     pub fn fill(mut self, color: Color) -> GraphicText {
         GraphicText {
             parts: self.parts,
-            fill: Some(color),
-            stroke: None,
+            // fill: Some(color),
+            // stroke: None,
+            params: GraphicParameters::with_colors(Some(color), None),
         }
     }
 }
@@ -101,19 +103,15 @@ impl Text {
 // TODO:
 // Use utf-16 with BOM '254u8', '255u8'
 // .encode_utf16() for iter, flat map to spilt bytes
-
+#[derive(Debug)]
 pub struct GraphicText {
     parts: Vec<TextPart>,
-    stroke: Option<Color>,
-    fill: Option<Color>,
+    params: GraphicParameters,
 }
 
 impl Graphic for GraphicText {
-    fn fill_color(&self) -> Option<Color> {
-        self.fill
-    }
-    fn stroke_color(&self) -> Option<Color> {
-        self.stroke
+    fn get_graphics_parameters(&self) -> &GraphicParameters {
+        &self.params
     }
     fn render(&self, out: &mut GraphicContext) {
         out.command(&mut [], "BT");
@@ -130,7 +128,7 @@ impl Graphic for GraphicText {
         out.command(&mut [], "ET");
     }
 }
-
+#[derive(Debug)]
 enum FontType {
     Type1,
     MMType1,
@@ -143,6 +141,7 @@ impl FontType {
         }
     }
 }
+#[derive(Debug)]
 pub struct FontObject {
     // /Type /Font
     subtype: FontType,
@@ -189,7 +188,7 @@ impl PDFData for FontObject {
         .write(o)
     }
 }
-
+#[derive(Debug)]
 pub struct Font {
     name: Rc<Name>,
     object: Rc<ObjRef<FontObject>>,
